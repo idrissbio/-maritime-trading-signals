@@ -1,0 +1,35 @@
+{
+  "data_sources": {
+    "mock_mode": false,
+    "datalastic_api_key": null,
+    "twelve_data_api_key": null,
+    "update_interval_minutes": 5,
+    "cache_duration_seconds": 300
+  },
+  "risk_management": {
+    "account_balance": 100000,
+    "risk_per_trade": 0.01,
+    "max_daily_trades": 15,
+    "max_positions": 10,
+    "max_correlated_positions": 3,
+    "max_tier3_allocation": 0.3
+  },
+  "alerts": {
+    "email_enabled": true,
+    "sms_enabled": true,
+    "discord_enabled": true,
+    "min_tier_for_sms": 2,
+    "rate_limit_minutes": 5
+  },
+  "trading": {
+    "min_signal_confidence": 0.65,
+    "symbols": ["CL", "NG", "GC", "SI", "HG"],
+    "ports": ["singapore", "houston", "rotterdam", "fujairah"],
+    "max_signal_age_hours": 24
+  },
+  "logging": {
+    "level": "INFO",
+    "file_rotation_mb": 10,
+    "backup_count": 5
+  }
+}

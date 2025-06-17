@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  maritime-dashboard:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - DATALASTIC_API_KEY=${DATALASTIC_API_KEY}
+      - TWELVEDATA_API_KEY=${TWELVEDATA_API_KEY}
+      - MOCK_MODE=${MOCK_MODE:-false}
+      - ACCOUNT_BALANCE=${ACCOUNT_BALANCE:-100000}
+      - RISK_PER_TRADE=${RISK_PER_TRADE:-0.01}
+      - MAX_DAILY_TRADES=${MAX_DAILY_TRADES:-15}
+      - MIN_SIGNAL_CONFIDENCE=${MIN_SIGNAL_CONFIDENCE:-0.65}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

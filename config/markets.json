@@ -1,0 +1,56 @@
+{
+  "futures": {
+    "CL": {
+      "name": "Crude Oil",
+      "exchange": "NYMEX",
+      "point_value": 1000,
+      "tick_size": 0.01,
+      "margin": 5000,
+      "trading_hours": "Sunday - Friday: 6:00 PM - 5:00 PM ET",
+      "related_ports": ["singapore", "houston", "fujairah"]
+    },
+    "NG": {
+      "name": "Natural Gas",
+      "exchange": "NYMEX", 
+      "point_value": 10000,
+      "tick_size": 0.001,
+      "margin": 3000,
+      "trading_hours": "Sunday - Friday: 6:00 PM - 5:00 PM ET",
+      "related_vessels": ["lng_carrier"]
+    },
+    "GC": {
+      "name": "Gold",
+      "exchange": "COMEX",
+      "point_value": 100,
+      "tick_size": 0.10,
+      "margin": 8000,
+      "trading_hours": "Sunday - Friday: 6:00 PM - 5:00 PM ET",
+      "related_ports": []
+    },
+    "SI": {
+      "name": "Silver",
+      "exchange": "COMEX",
+      "point_value": 5000,
+      "tick_size": 0.005,
+      "margin": 10000,
+      "trading_hours": "Sunday - Friday: 6:00 PM - 5:00 PM ET",
+      "related_ports": []
+    },
+    "HG": {
+      "name": "Copper",
+      "exchange": "COMEX",
+      "point_value": 25000,
+      "tick_size": 0.0005,
+      "margin": 4000,
+      "trading_hours": "Sunday - Friday: 6:00 PM - 5:00 PM ET",
+      "related_ports": ["singapore", "rotterdam"]
+    }
+  },
+  "correlations": {
+    "CL": {"HO": 0.85, "RB": 0.80, "NG": 0.25},
+    "NG": {"HO": 0.45, "CL": 0.25},
+    "GC": {"SI": 0.75},
+    "SI": {"GC": 0.75},
+    "HG": {"CL": 0.30}
+  }
+}
