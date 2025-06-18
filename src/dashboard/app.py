@@ -60,40 +60,69 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def initialize_session_state():
+    """Initialize all session state variables properly"""
+    
+    # Initialize basic data structures first
+    if 'signals' not in st.session_state:
+        st.session_state.signals = []
+    if 'maritime_events' not in st.session_state:
+        st.session_state.maritime_events = []
+    if 'market_data' not in st.session_state:
+        st.session_state.market_data = {}
+    if 'vessel_positions' not in st.session_state:
+        st.session_state.vessel_positions = []
+    if 'port_congestion' not in st.session_state:
+        st.session_state.port_congestion = []
+    if 'last_update' not in st.session_state:
+        st.session_state.last_update = datetime.now()
+    if 'data_loaded' not in st.session_state:
+        st.session_state.data_loaded = False
+    
+    # Initialize components
+    if 'data_fetcher' not in st.session_state:
+        try:
+            # Load environment variables for live API integration
+            from dotenv import load_dotenv
+            load_dotenv()
+            
+            datalastic_key = os.getenv("DATALASTIC_API_KEY")
+            twelve_data_key = os.getenv("TWELVEDATA_API_KEY")
+            mock_mode = os.getenv("MOCK_MODE", "false").lower() == "true"
+            
+            st.session_state.data_fetcher = DataFetcher(
+                datalastic_key=datalastic_key,
+                twelve_data_key=twelve_data_key,
+                mock_mode=mock_mode
+            )
+        except Exception as e:
+            st.error(f"Failed to initialize data fetcher: {e}")
+            st.session_state.data_fetcher = None
+            
+    if 'maritime_analyzer' not in st.session_state:
+        try:
+            st.session_state.maritime_analyzer = MaritimeAnalyzer()
+        except Exception as e:
+            st.error(f"Failed to initialize maritime analyzer: {e}")
+            st.session_state.maritime_analyzer = None
+            
+    if 'signal_generator' not in st.session_state:
+        try:
+            st.session_state.signal_generator = SignalGenerator()
+        except Exception as e:
+            st.error(f"Failed to initialize signal generator: {e}")
+            st.session_state.signal_generator = None
+            
+    if 'risk_manager' not in st.session_state:
+        try:
+            risk_params = RiskParameters(account_balance=100000)  # $100k demo account
+            st.session_state.risk_manager = RiskManager(risk_params)
+        except Exception as e:
+            st.error(f"Failed to initialize risk manager: {e}")
+            st.session_state.risk_manager = None
+
 # Initialize session state
-if 'data_fetcher' not in st.session_state:
-    # Load environment variables for live API integration
-    from dotenv import load_dotenv
-    load_dotenv()
-    
-    datalastic_key = os.getenv("DATALASTIC_API_KEY")
-    twelve_data_key = os.getenv("TWELVEDATA_API_KEY")
-    mock_mode = os.getenv("MOCK_MODE", "false").lower() == "true"
-    
-    st.session_state.data_fetcher = DataFetcher(
-        datalastic_key=datalastic_key,
-        twelve_data_key=twelve_data_key,
-        mock_mode=mock_mode
-    )
-if 'maritime_analyzer' not in st.session_state:
-    st.session_state.maritime_analyzer = MaritimeAnalyzer()
-if 'signal_generator' not in st.session_state:
-    st.session_state.signal_generator = SignalGenerator()
-if 'risk_manager' not in st.session_state:
-    risk_params = RiskParameters(account_balance=100000)  # $100k demo account
-    st.session_state.risk_manager = RiskManager(risk_params)
-if 'signals' not in st.session_state:
-    st.session_state.signals = []
-if 'maritime_events' not in st.session_state:
-    st.session_state.maritime_events = []
-if 'last_update' not in st.session_state:
-    st.session_state.last_update = datetime.now()
-if 'market_data' not in st.session_state:
-    st.session_state.market_data = {}
-if 'vessel_positions' not in st.session_state:
-    st.session_state.vessel_positions = []
-if 'port_congestion' not in st.session_state:
-    st.session_state.port_congestion = []
+initialize_session_state()
 
 def load_sample_data():
     """Load sample data for demonstration"""
@@ -144,6 +173,15 @@ def main():
     # Header
     st.title("🚢 Maritime Trading Signals Dashboard")
     st.markdown("Real-time maritime data analysis and trading signal generation")
+    
+    # Ensure data is loaded on first run
+    if not st.session_state.get('data_loaded', False):
+        with st.spinner("Loading initial data..."):
+            try:
+                load_sample_data()
+                st.session_state.data_loaded = True
+            except Exception as e:
+                st.error(f"Failed to load initial data: {e}")
     
     # Sidebar
     with st.sidebar:
@@ -517,18 +555,26 @@ def show_market_analysis():
     
     st.header("📈 Market Analysis")
     
-    if not hasattr(st.session_state, 'market_data'):
-        st.info("No market data available.")
+    # Ensure session state is initialized
+    if 'market_data' not in st.session_state or not st.session_state.market_data:
+        st.info("Loading market data...")
+        if st.button("Load Market Data", key="load_market_data_btn"):
+            load_sample_data()
+            st.rerun()
         return
     
     market_data = st.session_state.market_data
     
-    # Symbol selector
-    symbols = list(market_data.keys())
-    if symbols:
-        selected_symbol = st.selectbox("Select Symbol", symbols, key="market_analysis_symbol_selector")
-    else:
-        st.warning("No symbols available")
+    # Symbol selector with error handling
+    try:
+        symbols = list(market_data.keys()) if market_data else []
+        if symbols:
+            selected_symbol = st.selectbox("Select Symbol", symbols, key="market_analysis_symbol_selector")
+        else:
+            st.warning("No symbols available. Please load data first.")
+            return
+    except Exception as e:
+        st.error(f"Error accessing market data: {e}")
         return
     
     if selected_symbol and selected_symbol in market_data:
