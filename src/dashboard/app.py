@@ -88,40 +88,57 @@ if 'maritime_events' not in st.session_state:
     st.session_state.maritime_events = []
 if 'last_update' not in st.session_state:
     st.session_state.last_update = datetime.now()
+if 'market_data' not in st.session_state:
+    st.session_state.market_data = {}
+if 'vessel_positions' not in st.session_state:
+    st.session_state.vessel_positions = []
+if 'port_congestion' not in st.session_state:
+    st.session_state.port_congestion = []
 
 def load_sample_data():
     """Load sample data for demonstration"""
     
-    # Generate sample vessel positions
-    vessel_positions = st.session_state.data_fetcher.get_vessel_positions("singapore", "crude_oil")
-    
-    # Generate sample port congestion
-    ports = ["singapore", "houston", "rotterdam"]
-    port_congestion = []
-    for port in ports:
-        congestion = st.session_state.data_fetcher.get_port_congestion(port)
-        port_congestion.append(congestion)
-    
-    # Generate sample market data
-    symbols = ["CL", "NG", "GC"]
-    market_data = {}
-    volume_profiles = {}
-    
-    for symbol in symbols:
-        market_data[symbol] = st.session_state.data_fetcher.get_market_data(symbol)
-        volume_profiles[symbol] = st.session_state.data_fetcher.get_volume_profile(symbol)
-    
-    # Analyze maritime events
-    maritime_events = st.session_state.maritime_analyzer.analyze_all_maritime_factors(
-        port_congestion, vessel_positions, {}, {}
-    )
-    
-    # Generate signals
-    signals = st.session_state.signal_generator.generate_signals(
-        maritime_events, market_data, volume_profiles
-    )
-    
-    return signals, maritime_events, market_data, volume_profiles
+    try:
+        # Generate sample vessel positions
+        vessel_positions = st.session_state.data_fetcher.get_vessel_positions("singapore", "crude_oil")
+        st.session_state.vessel_positions = vessel_positions
+        
+        # Generate sample port congestion
+        ports = ["singapore", "houston", "rotterdam"]
+        port_congestion = []
+        for port in ports:
+            congestion = st.session_state.data_fetcher.get_port_congestion(port)
+            port_congestion.append(congestion)
+        st.session_state.port_congestion = port_congestion
+        
+        # Generate sample market data
+        symbols = ["CL", "NG", "GC"]
+        market_data = {}
+        volume_profiles = {}
+        
+        for symbol in symbols:
+            market_data[symbol] = st.session_state.data_fetcher.get_market_data(symbol)
+            volume_profiles[symbol] = st.session_state.data_fetcher.get_volume_profile(symbol)
+        
+        st.session_state.market_data = market_data
+        
+        # Analyze maritime events
+        maritime_events = st.session_state.maritime_analyzer.analyze_all_maritime_factors(
+            port_congestion, vessel_positions, {}, {}
+        )
+        st.session_state.maritime_events = maritime_events
+        
+        # Generate signals
+        signals = st.session_state.signal_generator.generate_signals(
+            maritime_events, market_data, volume_profiles
+        )
+        st.session_state.signals = signals
+        
+        return signals, maritime_events, market_data, volume_profiles
+        
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return [], [], {}, {}
 
 def main():
     # Header
@@ -508,7 +525,11 @@ def show_market_analysis():
     
     # Symbol selector
     symbols = list(market_data.keys())
-    selected_symbol = st.selectbox("Select Symbol", symbols)
+    if symbols:
+        selected_symbol = st.selectbox("Select Symbol", symbols, key="market_analysis_symbol_selector")
+    else:
+        st.warning("No symbols available")
+        return
     
     if selected_symbol and selected_symbol in market_data:
         data = market_data[selected_symbol]
