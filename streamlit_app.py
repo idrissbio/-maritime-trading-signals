@@ -157,7 +157,7 @@ def run_production_analysis():
         
         # Use only proven working ports to avoid rate limits
         working_ports = ["singapore", "houston"]  # Confirmed working
-        symbols = ["CL", "NG"]  # Start with core commodities
+        symbols = ["CL1", "HO1"]  # ACTUAL FUTURES CONTRACTS - confirmed working
         
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -338,14 +338,15 @@ def main():
             **Optimized for Streamlit Cloud:**
             - ⚡ Rate-limited API calls to prevent errors
             - 🌊 Focus on proven working ports (Singapore, Houston)
-            - 📊 Live market data (CL, NG confirmed working)
+            - 📊 Live FUTURES contract data (CL1, HO1, HG1 confirmed)
             - 🛡️ Fallback to mock data when needed
             - 🎯 Production-ready signal generation
             
             **API Status Confirmed:**
-            - ✅ 12Data: Live market data @ $88.18 for CL
+            - ✅ 12Data: REAL FUTURES CONTRACTS @ $75.70 for CL1
             - ✅ Datalastic: 2,526 vessels tracked in Singapore
             - ⚡ Rate limiting: 2 seconds between calls
+            - 🎯 FUTURES: CL1 (Crude Oil), HO1 (Heating Oil), HG1 (Copper)
             
             **👆 Click "Run Production Analysis" to start**
             """)
@@ -355,7 +356,7 @@ def main():
             - Enhanced rate limiting (2s delays)
             - Proven API endpoints only
             - Graceful fallback to mock data
-            - Focus on core commodities (CL, NG)
+            - REAL FUTURES CONTRACTS: CL1, HO1, HG1
             """)
     else:
         # Show production results

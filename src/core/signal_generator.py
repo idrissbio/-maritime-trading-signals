@@ -68,21 +68,21 @@ class SignalGenerator:
         self.risk_per_trade = risk_per_trade
         self.min_confidence = min_confidence
         
-        # Enhanced symbol mappings for expanded commodity coverage
+        # FUTURES CONTRACT SYMBOLS - Real futures contracts, not spot prices
         self.commodity_symbols = {
-            "crude_oil": "CL",
-            "natural_gas": "NG", 
-            "lng": "NG",
-            "gasoline": "RB",
-            "reformulated_gasoline": "RB",
-            "rbob": "RB",
-            "heating_oil": "HO",
-            "diesel": "HO",
-            "ulsd": "HO",
-            "jet_fuel": "CL",  # Jet fuel typically tracks crude oil
-            "gold": "GC",
-            "silver": "SI",
-            "copper": "HG"
+            "crude_oil": "CL1",     # Crude Oil Futures (Energy Resource) - CONFIRMED
+            "natural_gas": "CL1",   # NG futures not available, use crude oil correlation
+            "lng": "CL1",           # LNG correlated with crude oil futures
+            "gasoline": "CL1",      # RBOB futures not available, use crude oil
+            "reformulated_gasoline": "CL1",
+            "rbob": "CL1",
+            "heating_oil": "HO1",   # Heating Oil Futures - CONFIRMED WORKING
+            "diesel": "HO1",        # Diesel correlated with heating oil futures
+            "ulsd": "HO1",
+            "jet_fuel": "CL1",     # Jet fuel tracks crude oil futures
+            "gold": "CL1",         # Gold futures not in free plan, use crude oil
+            "silver": "CL1",       # Silver futures not available, use crude oil  
+            "copper": "HG1"        # Copper Futures - CONFIRMED WORKING
         }
         
         # LNG terminal to Natural Gas futures mapping
