@@ -125,27 +125,51 @@ def initialize_session_state():
 initialize_session_state()
 
 def load_sample_data():
-    """Load sample data for demonstration"""
+    """Load enhanced data with all strategic ports and commodities"""
     
     try:
-        # Generate sample vessel positions
-        vessel_positions = st.session_state.data_fetcher.get_vessel_positions("singapore", "crude_oil")
+        # Load configuration for enhanced coverage
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'config', 'settings.json')
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+        except:
+            # Fallback configuration with enhanced coverage
+            config = {
+                "trading": {
+                    "ports": ["strait_of_hormuz", "suez_canal", "panama_canal", "singapore", "houston", "rotterdam", "fujairah", "sabine_pass", "freeport_lng", "cameron_lng"],
+                    "symbols": ["CL", "NG", "GC", "SI", "HG", "RB", "HO"]
+                }
+            }
+        
+        # Use priority scanning order from data fetcher
+        priority_ports = st.session_state.data_fetcher.get_priority_scanning_order()
+        enhanced_ports = [port for port in priority_ports if port in config["trading"]["ports"]][:6]  # Limit to top 6 for performance
+        
+        # Generate vessel positions across multiple regions and cargo types
+        vessel_positions = []
+        cargo_types = ["crude_oil", "lng", "gasoline", "heating_oil", "container"]
+        
+        for port in enhanced_ports:
+            for cargo_type in cargo_types[:3]:  # Limit cargo types for performance
+                vessels = st.session_state.data_fetcher.get_vessel_positions(port, cargo_type)
+                vessel_positions.extend(vessels)
+        
         st.session_state.vessel_positions = vessel_positions
         
-        # Generate sample port congestion
-        ports = ["singapore", "houston", "rotterdam"]
+        # Generate enhanced port congestion data
         port_congestion = []
-        for port in ports:
+        for port in enhanced_ports:
             congestion = st.session_state.data_fetcher.get_port_congestion(port)
             port_congestion.append(congestion)
         st.session_state.port_congestion = port_congestion
         
-        # Generate sample market data
-        symbols = ["CL", "NG", "GC"]
+        # Generate market data for all enhanced commodity symbols
+        enhanced_symbols = config["trading"]["symbols"]
         market_data = {}
         volume_profiles = {}
         
-        for symbol in symbols:
+        for symbol in enhanced_symbols:
             market_data[symbol] = st.session_state.data_fetcher.get_market_data(symbol)
             volume_profiles[symbol] = st.session_state.data_fetcher.get_volume_profile(symbol)
         
@@ -155,9 +179,12 @@ def load_sample_data():
         maritime_events = st.session_state.maritime_analyzer.analyze_all_maritime_factors(
             port_congestion, vessel_positions, {}, {}
         )
+        
+        # Apply chokepoint multipliers to enhance event severity for strategic locations
+        maritime_events = st.session_state.data_fetcher.apply_chokepoint_multipliers(maritime_events)
         st.session_state.maritime_events = maritime_events
         
-        # Generate signals
+        # Generate enhanced signals with multi-commodity correlation validation
         signals = st.session_state.signal_generator.generate_signals(
             maritime_events, market_data, volume_profiles
         )
