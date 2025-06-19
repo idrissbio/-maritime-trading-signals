@@ -68,16 +68,54 @@ class SignalGenerator:
         self.risk_per_trade = risk_per_trade
         self.min_confidence = min_confidence
         
-        # Symbol mappings for commodities
+        # Enhanced symbol mappings for expanded commodity coverage
         self.commodity_symbols = {
             "crude_oil": "CL",
             "natural_gas": "NG", 
             "lng": "NG",
             "gasoline": "RB",
+            "reformulated_gasoline": "RB",
+            "rbob": "RB",
             "heating_oil": "HO",
+            "diesel": "HO",
+            "ulsd": "HO",
+            "jet_fuel": "CL",  # Jet fuel typically tracks crude oil
             "gold": "GC",
             "silver": "SI",
             "copper": "HG"
+        }
+        
+        # LNG terminal to Natural Gas futures mapping
+        self.lng_terminals = {
+            "sabine_pass": {
+                "primary_symbol": "NG",
+                "capacity_multiplier": 2.2,  # Largest US LNG export terminal
+                "impact_radius_nm": 50,
+                "notes": "Largest US LNG export terminal - major NG price impact"
+            },
+            "freeport_lng": {
+                "primary_symbol": "NG",
+                "capacity_multiplier": 1.8,
+                "impact_radius_nm": 40,
+                "notes": "Major US export facility with global impact"
+            },
+            "cameron_lng": {
+                "primary_symbol": "NG",
+                "capacity_multiplier": 1.6,
+                "impact_radius_nm": 35,
+                "notes": "Gulf Coast export hub"
+            }
+        }
+        
+        # Commodity-specific volatility and characteristics
+        self.commodity_characteristics = {
+            "CL": {"base_volatility": 0.025, "tick_size": 0.01, "contract_size": 1000},
+            "NG": {"base_volatility": 0.045, "tick_size": 0.001, "contract_size": 10000},
+            "RB": {"base_volatility": 0.030, "tick_size": 0.0001, "contract_size": 42000},
+            "HO": {"base_volatility": 0.028, "tick_size": 0.0001, "contract_size": 42000},
+            "GC": {"base_volatility": 0.020, "tick_size": 0.10, "contract_size": 100},
+            "SI": {"base_volatility": 0.035, "tick_size": 0.005, "contract_size": 5000},
+            "HG": {"base_volatility": 0.032, "tick_size": 0.0005, "contract_size": 25000}
         }
         
         # Tier criteria
@@ -100,7 +138,8 @@ class SignalGenerator:
             }
         }
         
-        logger.info("SignalGenerator initialized")
+        logger.info(f"SignalGenerator initialized with {len(self.commodity_symbols)} commodity mappings")
+        logger.info(f"LNG terminals configured: {list(self.lng_terminals.keys())}")
 
     def generate_signals(self, 
                         maritime_events: List[MaritimeEvent],
@@ -128,14 +167,14 @@ class SignalGenerator:
             symbol_market_data = market_data[symbol]
             volume_profile = volume_profiles.get(symbol, {})
             
-            # Calculate composite maritime score
-            maritime_score = self._calculate_maritime_score(events)
+            # Calculate composite maritime score with LNG terminal enhancement
+            maritime_score = self._calculate_maritime_score(events, symbol)
             
             # Calculate volume score
             volume_score = self._calculate_volume_score(symbol_market_data, volume_profile)
             
-            # Calculate technical score
-            technical_score = self._calculate_technical_score(symbol_market_data)
+            # Calculate technical score with commodity-specific parameters
+            technical_score = self._calculate_technical_score(symbol_market_data, symbol)
             
             # Determine signal direction and strength
             direction, signal_strength = self._determine_signal_direction(events, symbol_market_data)
@@ -197,11 +236,14 @@ class SignalGenerator:
         # Sort by confidence and tier
         signals.sort(key=lambda x: (x.tier.value, -x.confidence_score))
         
-        logger.info(f"Generated {len(signals)} trading signals")
-        return signals
+        # Phase 3: Apply multi-commodity signal correlation validation
+        validated_signals = self._validate_cross_commodity_signals(signals)
+        
+        logger.info(f"Generated {len(validated_signals)} validated trading signals (from {len(signals)} initial)")
+        return validated_signals
 
-    def _calculate_maritime_score(self, events: List[MaritimeEvent]) -> float:
-        """Calculate composite maritime score from events"""
+    def _calculate_maritime_score(self, events: List[MaritimeEvent], symbol: str = None) -> float:
+        """Calculate composite maritime score from events with LNG terminal enhancement"""
         if not events:
             return 0.0
         
@@ -218,6 +260,21 @@ class SignalGenerator:
                 score *= 1.2
             elif event.event_type == "supply_pressure":
                 score *= 1.1
+            
+            # LNG terminal specific enhancements for Natural Gas futures
+            if symbol == "NG" and hasattr(event, 'location'):
+                if event.location in self.lng_terminals:
+                    lng_info = self.lng_terminals[event.location]
+                    capacity_multiplier = lng_info["capacity_multiplier"]
+                    score *= capacity_multiplier
+                    logger.debug(f"Applied LNG terminal multiplier {capacity_multiplier}x for {event.location}")
+            
+            # Enhanced scoring for refined products (RB, HO) from crude oil events
+            elif symbol in ["RB", "HO"] and event.affected_commodity == "crude_oil":
+                # Refined products get boosted score from crude oil maritime events
+                refinement_multiplier = 1.3 if symbol == "RB" else 1.2  # Gasoline more sensitive
+                score *= refinement_multiplier
+                logger.debug(f"Applied refinement multiplier {refinement_multiplier}x for {symbol}")
             
             weighted_scores.append(score * weight)
             total_weight += weight
@@ -275,38 +332,55 @@ class SignalGenerator:
         volume_score = (volume_breakout * 0.4 + correlation * 0.3 + poc_score * 0.3)
         return min(1.0, volume_score)
 
-    def _calculate_technical_score(self, market_data: List[MarketData]) -> float:
-        """Calculate technical analysis score"""
+    def _calculate_technical_score(self, market_data: List[MarketData], symbol: str = None) -> float:
+        """Calculate technical analysis score with commodity-specific parameters"""
         if len(market_data) < 50:
             return 0.0
         
         prices = [d.close for d in market_data]
         volumes = [d.volume for d in market_data]
         
-        # Moving averages
-        ma_20 = np.mean(prices[-20:])
-        ma_50 = np.mean(prices[-50:])
+        # Get commodity-specific characteristics
+        commodity_chars = self.commodity_characteristics.get(symbol, {
+            "base_volatility": 0.025, "tick_size": 0.01, "contract_size": 1000
+        })
+        
+        # Moving averages (adjust periods based on commodity volatility)
+        short_period = 20 if commodity_chars["base_volatility"] < 0.03 else 15
+        long_period = 50 if commodity_chars["base_volatility"] < 0.03 else 40
+        
+        ma_short = np.mean(prices[-short_period:])
+        ma_long = np.mean(prices[-long_period:]) if len(prices) >= long_period else np.mean(prices)
         current_price = prices[-1]
         
-        # Trend score
+        # Trend score with commodity-specific sensitivity
         trend_score = 0.0
-        if current_price > ma_20 > ma_50:
+        if current_price > ma_short > ma_long:
             trend_score = 0.8  # Strong uptrend
-        elif current_price > ma_20:
+        elif current_price > ma_short:
             trend_score = 0.6  # Mild uptrend
-        elif current_price < ma_20 < ma_50:
+        elif current_price < ma_short < ma_long:
             trend_score = 0.2  # Downtrend
         else:
             trend_score = 0.4  # Sideways
         
-        # Momentum (RSI-like calculation)
+        # Volatility-adjusted momentum
         momentum_score = self._calculate_momentum_score(prices)
         
-        # Support/Resistance
-        sr_score = self._calculate_support_resistance_score(prices)
+        # Support/Resistance with tick size consideration
+        sr_score = self._calculate_support_resistance_score(prices, commodity_chars["tick_size"])
         
-        # Combine technical factors
-        technical_score = (trend_score * 0.4 + momentum_score * 0.3 + sr_score * 0.3)
+        # Commodity-specific weighting
+        if symbol == "NG":
+            # Natural gas is more momentum-driven
+            technical_score = (trend_score * 0.3 + momentum_score * 0.5 + sr_score * 0.2)
+        elif symbol in ["RB", "HO"]:
+            # Refined products more trend-following
+            technical_score = (trend_score * 0.5 + momentum_score * 0.3 + sr_score * 0.2)
+        else:
+            # Default weighting
+            technical_score = (trend_score * 0.4 + momentum_score * 0.3 + sr_score * 0.3)
+        
         return min(1.0, technical_score)
 
     def _calculate_momentum_score(self, prices: List[float]) -> float:
@@ -338,8 +412,8 @@ class SignalGenerator:
         else:
             return 0.5  # Neutral
 
-    def _calculate_support_resistance_score(self, prices: List[float]) -> float:
-        """Calculate support/resistance score"""
+    def _calculate_support_resistance_score(self, prices: List[float], tick_size: float = 0.01) -> float:
+        """Calculate support/resistance score with tick size consideration"""
         if len(prices) < 20:
             return 0.5
         
@@ -351,10 +425,15 @@ class SignalGenerator:
         high_distance = (recent_high - current_price) / recent_high
         low_distance = (current_price - recent_low) / current_price
         
-        # Score based on position
-        if low_distance < 0.02:  # Near support
+        # Adjust thresholds based on tick size and price level
+        base_threshold = 0.02
+        tick_adjustment = (tick_size * 10) / current_price  # Relative tick size impact
+        threshold = max(base_threshold, tick_adjustment * 2)
+        
+        # Score based on position with tick-adjusted sensitivity
+        if low_distance < threshold:  # Near support
             return 0.8
-        elif high_distance < 0.02:  # Near resistance
+        elif high_distance < threshold:  # Near resistance
             return 0.3
         else:
             return 0.5
@@ -544,3 +623,129 @@ class SignalGenerator:
             "long_signals": len([s for s in signals if s.direction == SignalDirection.LONG]),
             "short_signals": len([s for s in signals if s.direction == SignalDirection.SHORT])
         }
+
+    def _validate_cross_commodity_signals(self, signals: List[TradingSignal]) -> List[TradingSignal]:
+        """Phase 3: Multi-commodity signal correlation validation and enhancement"""
+        if len(signals) < 2:
+            return signals
+        
+        validated_signals = []
+        
+        # Define commodity correlation groups
+        oil_complex = ["CL", "RB", "HO"]  # Oil, Gasoline, Heating Oil
+        metals_group = ["GC", "SI", "HG"]  # Gold, Silver, Copper
+        energy_group = ["CL", "NG", "RB", "HO"]  # All energy commodities
+        
+        for signal in signals:
+            enhanced_signal = signal
+            original_confidence = signal.confidence_score
+            
+            # Find correlated signals in the same direction
+            correlated_signals = self._find_correlated_signals(signal, signals, oil_complex, energy_group)
+            
+            if len(correlated_signals) > 0:
+                # Boost confidence for correlated signals
+                correlation_boost = min(0.15, len(correlated_signals) * 0.05)  # Max 15% boost
+                enhanced_signal.confidence_score = min(1.0, original_confidence + correlation_boost)
+                
+                # Update tier if confidence improvement is significant
+                if enhanced_signal.confidence_score >= 0.85 and signal.tier != SignalTier.TIER_1:
+                    if signal.maritime_score > 0.7:  # Must have strong maritime component
+                        enhanced_signal.tier = SignalTier.TIER_1
+                        enhanced_signal.reason += f" [UPGRADED: Cross-commodity correlation with {len(correlated_signals)} signals]"
+                        logger.info(f"Upgraded {signal.symbol} to Tier 1 due to cross-commodity correlation")
+                
+                enhanced_signal.reason += f" [CORRELATED: {len(correlated_signals)} supporting signals]"
+                logger.debug(f"Enhanced {signal.symbol} confidence: {original_confidence:.2%} → {enhanced_signal.confidence_score:.2%}")
+            
+            # Validate against conflicting signals (same commodity group, opposite direction)
+            conflicting_signals = self._find_conflicting_signals(signal, signals, oil_complex, energy_group)
+            
+            if len(conflicting_signals) > 0:
+                # Reduce confidence for conflicting signals
+                conflict_penalty = min(0.20, len(conflicting_signals) * 0.08)  # Max 20% penalty
+                enhanced_signal.confidence_score = max(0.0, enhanced_signal.confidence_score - conflict_penalty)
+                
+                # Downgrade tier if confidence drops significantly
+                if enhanced_signal.confidence_score < 0.60:
+                    logger.warning(f"Rejected {signal.symbol} due to conflicting cross-commodity signals")
+                    continue  # Skip this signal
+                
+                enhanced_signal.reason += f" [CONFLICT: {len(conflicting_signals)} opposing signals]"
+                logger.debug(f"Reduced {signal.symbol} confidence due to conflicts: {original_confidence:.2%} → {enhanced_signal.confidence_score:.2%}")
+            
+            # Only include signals that still meet minimum confidence after validation
+            if enhanced_signal.confidence_score >= self.min_confidence:
+                validated_signals.append(enhanced_signal)
+            else:
+                logger.debug(f"Rejected {signal.symbol} - confidence {enhanced_signal.confidence_score:.2%} below threshold {self.min_confidence:.2%}")
+        
+        return validated_signals
+    
+    def _find_correlated_signals(self, target_signal: TradingSignal, all_signals: List[TradingSignal], 
+                                oil_complex: List[str], energy_group: List[str]) -> List[TradingSignal]:
+        """Find signals that should be positively correlated with the target signal"""
+        correlated = []
+        
+        for signal in all_signals:
+            if signal.symbol == target_signal.symbol:
+                continue
+                
+            # Same direction is required for correlation
+            if signal.direction != target_signal.direction:
+                continue
+            
+            # Check if signals are in correlated commodity groups
+            is_correlated = False
+            
+            # Oil complex correlation (CL, RB, HO)
+            if target_signal.symbol in oil_complex and signal.symbol in oil_complex:
+                is_correlated = True
+            
+            # Energy group broader correlation during supply disruptions
+            elif (target_signal.symbol in energy_group and signal.symbol in energy_group and
+                  target_signal.maritime_score > 0.6 and signal.maritime_score > 0.6):
+                is_correlated = True
+            
+            # Natural gas and LNG terminals correlation
+            elif ((target_signal.symbol == "NG" and signal.symbol in ["CL"]) or 
+                  (target_signal.symbol in ["CL"] and signal.symbol == "NG")):
+                # Only correlate if one involves LNG terminal events
+                if any("lng" in event.location.lower() if hasattr(event, 'location') else False 
+                       for event in target_signal.maritime_events + signal.maritime_events):
+                    is_correlated = True
+            
+            if is_correlated and signal.confidence_score >= 0.60:  # Only consider decent quality signals
+                correlated.append(signal)
+        
+        return correlated
+    
+    def _find_conflicting_signals(self, target_signal: TradingSignal, all_signals: List[TradingSignal],
+                                 oil_complex: List[str], energy_group: List[str]) -> List[TradingSignal]:
+        """Find signals that conflict with the target signal (same group, opposite direction)"""
+        conflicting = []
+        
+        for signal in all_signals:
+            if signal.symbol == target_signal.symbol:
+                continue
+                
+            # Opposite direction creates conflict
+            if signal.direction == target_signal.direction:
+                continue
+            
+            # Check for conflicting commodity relationships
+            is_conflicting = False
+            
+            # Oil complex internal conflicts
+            if target_signal.symbol in oil_complex and signal.symbol in oil_complex:
+                is_conflicting = True
+            
+            # Energy group conflicts during high confidence events
+            elif (target_signal.symbol in energy_group and signal.symbol in energy_group and
+                  target_signal.confidence_score > 0.7 and signal.confidence_score > 0.7):
+                is_conflicting = True
+            
+            if is_conflicting:
+                conflicting.append(signal)
+        
+        return conflicting

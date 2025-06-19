@@ -222,18 +222,36 @@ class MaritimeTradingSystem:
         try:
             self.logger.info("Starting analysis cycle")
             
-            # 1. Fetch maritime data
+            # 1. Fetch maritime data using priority scanning system
             vessel_positions = []
             port_congestion_data = []
             
-            for port in self.config["trading"]["ports"]:
-                # Get vessel positions near port
-                vessels = self.data_fetcher.get_vessel_positions(port, "all")
-                vessel_positions.extend(vessels)
-                
-                # Get port congestion
-                congestion = self.data_fetcher.get_port_congestion(port)
-                port_congestion_data.append(congestion)
+            # Use priority scanning order for optimal data collection
+            priority_ports = self.data_fetcher.get_priority_scanning_order()
+            
+            # Scan ports in priority order, applying intelligent rate limiting
+            for port in priority_ports:
+                if port in self.config["trading"]["ports"]:
+                    self.logger.debug(f"Scanning priority port: {port}")
+                    
+                    # Get port priority info for intelligent scanning
+                    port_info = self.data_fetcher.get_port_priority_info(port)
+                    self.logger.debug(f"Port {port} priority: {port_info['strategic_importance']}, "
+                                    f"multiplier: {port_info['significance_multiplier']}")
+                    
+                    # Get vessel positions near port
+                    vessels = self.data_fetcher.get_vessel_positions(port, "all")
+                    vessel_positions.extend(vessels)
+                    
+                    # Get port congestion (with automatic chokepoint multipliers applied)
+                    congestion = self.data_fetcher.get_port_congestion(port)
+                    port_congestion_data.append(congestion)
+                    
+                    # Apply rate limiting based on port priority
+                    if port_info["strategic_importance"] == "critical":
+                        time.sleep(0.5)  # Shorter delay for critical ports
+                    else:
+                        time.sleep(1.0)  # Standard delay for regular ports
             
             # 2. Fetch market data
             market_data = {}
@@ -248,8 +266,11 @@ class MaritimeTradingSystem:
                 port_congestion_data, vessel_positions, {}, {}
             )
             
+            # Apply chokepoint multipliers to enhance event severity for strategic locations
+            maritime_events = self.data_fetcher.apply_chokepoint_multipliers(maritime_events)
+            
             self.stats["events_detected"] += len(maritime_events)
-            self.logger.info(f"Detected {len(maritime_events)} maritime events")
+            self.logger.info(f"Detected {len(maritime_events)} maritime events (with chokepoint multipliers applied)")
             
             # 4. Generate trading signals
             signals = self.signal_generator.generate_signals(

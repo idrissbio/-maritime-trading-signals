@@ -23,8 +23,8 @@
   },
   "trading": {
     "min_signal_confidence": 0.65,
-    "symbols": ["CL", "NG", "GC", "SI", "HG"],
-    "ports": ["singapore", "houston", "rotterdam", "fujairah"],
+    "symbols": ["CL", "NG", "GC", "SI", "HG", "RB", "HO"],
+    "ports": ["strait_of_hormuz", "suez_canal", "panama_canal", "singapore", "houston", "rotterdam", "fujairah", "sabine_pass", "freeport_lng", "cameron_lng"],
     "max_signal_age_hours": 24
   },
   "logging": {
